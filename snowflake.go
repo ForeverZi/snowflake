@@ -2,14 +2,13 @@ package snowflake
 
 import (
 	"errors"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 const (
-	MaxSeqID = 1<<14 - 1
+	MaxSeqID = 1<<18 - 1
 	MaxMID   = 1<<4 - 1
 	MaxSec   = 1<<41 - 1
 )
@@ -76,12 +75,11 @@ func (gen *SnowflakeIdGen) NextID() (id int64, err error) {
 }
 
 func (gen *SnowflakeIdGen) genID(msec int64) (id int64) {
-	// 1位0,41位毫秒数,随机数4位,机器编号4位,序号14
-	seqPart := gen.seqID & MaxSeqID
-	midPart := gen.machineID & MaxMID << 14
-	randPart := int64(rand.Int31n(16) << 18)
+	// 1位0,41位秒数,机器编号4位,序号18
+	midPart := gen.machineID & MaxMID
+	seqPart := gen.seqID & MaxSeqID << 4
 	msecPart := msec << 22
-	return seqPart | midPart | randPart | msecPart
+	return seqPart | midPart | msecPart
 }
 
 func (gen *SnowflakeIdGen) getMSec() (msec int64) {
@@ -92,5 +90,4 @@ func (gen *SnowflakeIdGen) getMSec() (msec int64) {
 func (gen *SnowflakeIdGen) updateMSec() {
 	msec := time.Now().Unix() & MaxSec
 	atomic.StoreInt64(&gen.msec, msec)
-	return
 }
