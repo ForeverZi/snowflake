@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,7 +15,7 @@ type ISnowflakeIdGen interface {
 const (
 	MaxSeqID = 1<<14 - 1
 	MaxMID   = 1<<4 - 1
-	MaxMSec  = 1<<41 - 1
+	MaxSec   = 1<<41 - 1
 )
 
 var ErrOutOfSeqRange = errors.New("超出了序列号范围,请稍候重试")
@@ -25,6 +26,9 @@ type snowflakeIdGen struct {
 	epochTimeInMsec int64
 	lastMSec        int64
 	mutex           sync.Mutex
+	msec            int64
+	running         int32
+	stopChan        chan bool
 }
 
 // NewSnowflakeIDGen 新建一个ID生成器
@@ -32,6 +36,31 @@ func NewSnowflakeIDGen(machineID, epochTimeInMSec int64) ISnowflakeIdGen {
 	return &snowflakeIdGen{
 		machineID:       machineID,
 		epochTimeInMsec: epochTimeInMSec,
+		stopChan:        make(chan bool, 1),
+	}
+}
+
+func (gen *snowflakeIdGen) Stop() {
+	gen.stopChan <- true
+}
+
+func (gen *snowflakeIdGen) Run() {
+	defer func() {
+		atomic.StoreInt32(&gen.running, 0)
+	}()
+	// 已运行
+	if !atomic.CompareAndSwapInt32(&gen.running, 0, 1) {
+		return
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-gen.stopChan:
+			return
+		case <-ticker.C:
+			gen.updateMSec()
+		}
 	}
 }
 
@@ -60,6 +89,12 @@ func (gen *snowflakeIdGen) genID(msec int64) (id int64) {
 }
 
 func (gen *snowflakeIdGen) getMSec() (msec int64) {
-	msec = (time.Now().UnixNano() / 1000000) & MaxMSec
+	msec = atomic.LoadInt64(&gen.msec)
+	return
+}
+
+func (gen *snowflakeIdGen) updateMSec() {
+	msec := time.Now().Unix() & MaxSec
+	atomic.StoreInt64(&gen.msec, msec)
 	return
 }
