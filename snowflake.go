@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-type ISnowflakeIdGen interface {
-	NextID() (id int64, err error)
-}
-
 const (
 	MaxSeqID = 1<<14 - 1
 	MaxMID   = 1<<4 - 1
@@ -20,7 +16,7 @@ const (
 
 var ErrOutOfSeqRange = errors.New("超出了序列号范围,请稍候重试")
 
-type snowflakeIdGen struct {
+type SnowflakeIdGen struct {
 	machineID       int64
 	seqID           int64
 	epochTimeInMsec int64
@@ -32,19 +28,19 @@ type snowflakeIdGen struct {
 }
 
 // NewSnowflakeIDGen 新建一个ID生成器
-func NewSnowflakeIDGen(machineID, epochTimeInMSec int64) ISnowflakeIdGen {
-	return &snowflakeIdGen{
+func NewSnowflakeIDGen(machineID, epochTimeInMSec int64) *SnowflakeIdGen {
+	return &SnowflakeIdGen{
 		machineID:       machineID,
 		epochTimeInMsec: epochTimeInMSec,
 		stopChan:        make(chan bool, 1),
 	}
 }
 
-func (gen *snowflakeIdGen) Stop() {
+func (gen *SnowflakeIdGen) Stop() {
 	gen.stopChan <- true
 }
 
-func (gen *snowflakeIdGen) Run() {
+func (gen *SnowflakeIdGen) Run() {
 	defer func() {
 		atomic.StoreInt32(&gen.running, 0)
 	}()
@@ -64,7 +60,7 @@ func (gen *snowflakeIdGen) Run() {
 	}
 }
 
-func (gen *snowflakeIdGen) NextID() (id int64, err error) {
+func (gen *SnowflakeIdGen) NextID() (id int64, err error) {
 	gen.mutex.Lock()
 	defer gen.mutex.Unlock()
 	msec := gen.getMSec()
@@ -79,7 +75,7 @@ func (gen *snowflakeIdGen) NextID() (id int64, err error) {
 	return
 }
 
-func (gen *snowflakeIdGen) genID(msec int64) (id int64) {
+func (gen *SnowflakeIdGen) genID(msec int64) (id int64) {
 	// 1位0,41位毫秒数,随机数4位,机器编号4位,序号14
 	seqPart := gen.seqID & MaxSeqID
 	midPart := gen.machineID & MaxMID << 14
@@ -88,12 +84,12 @@ func (gen *snowflakeIdGen) genID(msec int64) (id int64) {
 	return seqPart | midPart | randPart | msecPart
 }
 
-func (gen *snowflakeIdGen) getMSec() (msec int64) {
+func (gen *SnowflakeIdGen) getMSec() (msec int64) {
 	msec = atomic.LoadInt64(&gen.msec)
 	return
 }
 
-func (gen *snowflakeIdGen) updateMSec() {
+func (gen *SnowflakeIdGen) updateMSec() {
 	msec := time.Now().Unix() & MaxSec
 	atomic.StoreInt64(&gen.msec, msec)
 	return
