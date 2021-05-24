@@ -56,6 +56,7 @@ func (gen *snowflakeIdGen) genID(msec int64) (id int64) {
 	midPart := gen.machineID & MaxMID << 14
 	randPart := int64(rand.Int31n(16) << 18)
 	msecPart := msec << 22
+	gen.seqID++
 	return seqPart | midPart | randPart | msecPart
 }
 
