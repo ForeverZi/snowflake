@@ -69,6 +69,8 @@ func (gen *SnowflakeIdGen) NextID() (id int64, err error) {
 	} else if gen.seqID >= MaxSeqID {
 		err = ErrOutOfSeqRange
 		return
+	} else {
+		gen.seqID++
 	}
 	id = gen.genID(msec)
 	return
